@@ -1,0 +1,397 @@
+---
+title: "Video Games Sales"
+author: "Simone Rossi"
+date: "2022-06-13"
+output:
+  ioslides_presentation:
+    css: style.css
+    widescreen: yes
+  beamer_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r libraries, include=FALSE}
+#Installazione librerie
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("reshape2")
+#install.packages("ggpubr")
+#install.packages("gridExtra")
+
+#Inizializzazione librerie
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(ggpubr)
+library(gridExtra)
+```
+
+## Introduzione al dataset
+
+Il dataset analizzato è preso dal sito "kaggle". In esso troviamo il numero delle vendite (in milioni di copie) di innumerevoli videogames. I dati presenti partono dal 1980 ed arrivano al 2016.\
+
+<center>
+![](joystick.gif)
+</center>
+
+## Cosa vogliamo scoprire?
+
+1. Quanti giochi sono stati pubblicati negli anni\
+2. Quali sono state le vendite annuali per "regione"\
+3. Quali sono stati i 5 giochi più venduti\
+4. Quali sono stati i 10 editori che hanno pubblicato più giochi\
+5. Quali sono stati i 10 editori che hanno venduto più giochi\
+6. Popolarità dei diversi generei dei giochi negli anni\
+7. Quanto hanno venduto i giochi in base al genere\
+8. Quali sono le 20 piattaforme con più giochi\
+9. Quanto hanno venduto i giochi in base alla piattaforma\
+10. Qual è la classificazione dei diversi giochi
+
+```{r, include=FALSE}
+#Caricamento dataset - cambiare path per far funzionare
+sales_dataset <- read.csv("~/Documents/GitHub/prjVideoGamesSalesDataset/Video_Games_Sales_as_at_22_Dec_2016.csv")
+```
+
+```{r, include=FALSE}
+#pulizia del dataset - nome e genere NA
+sales_dataset <- subset(sales_dataset, sales_dataset$Name != "" | sales_dataset$Genre != "")
+```
+
+## Pubblicazione dei giochi negli anni
+
+```{r year_order, out.height = "100%", out.width = "100%"}
+#Creazione databalle in ordine di anno
+year_Sorted <- sales_dataset %>%
+  filter(Year_of_Release <= 2016) %>%
+  group_by(Year_of_Release) %>%
+  summarize(number_of_games_released = n()) %>%
+  arrange(Year_of_Release) %>%
+  mutate(cumsum_number_of_games_released=cumsum(number_of_games_released))
+
+#grafico in ordine di anno
+year_p <- year_Sorted %>%
+  ggplot(aes(x = Year_of_Release, y = number_of_games_released)) +
+  geom_bar(stat = "identity", fill='#6D1C68') +
+  theme(plot.title = element_text(face = "bold", size=16),
+        axis.text.x = element_text(size=8,angle=45,vjust=0.5, color="black"),
+        axis.text.y = element_text(color = "black", face = "bold", size = 9),
+        axis.title = element_text(size=12, color = "black", face = "bold"),
+        plot.subtitle = element_text(size=14)) +
+  labs(x='Anno',y="Numero di giochi rilasciati",title=NULL,subtitle=NULL)
+year_p
+```
+Come possiamo vedere, l'anno con il maggior numero di giochi rilasciati è stato il 2008, seguito dal 2009 e dal 2010.
+
+## Vendite annuali per "regione"
+
+```{r year_sales, out.height = "100%", out.width = "100%"}
+#Somma vendite annuali
+yearsales <- sales_dataset %>%
+  filter(Year_of_Release <= 2016) %>%
+  group_by(Year_of_Release) %>%
+  summarise(NA_Sales = round(sum(NA_Sales), digits = 2),
+            EU_Sales = round(sum(EU_Sales), digits = 2),
+            JP_Sales = round(sum(EU_Sales), digits = 2),
+            Others_Sales = round(sum(Other_Sales), digits = 2)) %>%
+  arrange(desc(Year_of_Release))
+
+#melt dati
+yearmelt <- melt(yearsales, na.rm = TRUE, id.vars = 'Year_of_Release')
+yearmelt$Year_of_Release <- as.character(yearmelt$Year_of_Release)
+yearmelt$variable <- as.factor(yearmelt$variable)
+yearmelt$value <- as.numeric(yearmelt$value)
+
+#grafico
+yearmelt %>%
+  filter(Year_of_Release != "N/A") %>%
+  ggplot(aes(x = Year_of_Release, y = value, fill = variable)) +
+  geom_col(position = "stack") + 
+  labs(title = NULL, y= "Vendite (milioni di copie)", x= "Anno", fill = "Legenda:") +
+  theme(axis.text.x = element_text(vjust=0.5, angle = 45, color = "black", size = 8),
+        plot.title = element_text(size=16, face = "bold"),
+        axis.title = element_text(size = 12, color = "black", face = "bold"),
+        axis.text.y = element_text(color = "black", face = "bold", size = 9),
+        legend.title = element_text(size = 12, face = "bold", color = "black"),
+        legend.text = element_text (size = 10, color = "black")) +
+  scale_fill_manual(values = c("#6D1C68", "#B85597", "#E290B3", "#F3CAD2"))
+```
+Come si evince dal presente grafico, l'andamento delle vendite segue approssimativamente l'andamento del rilascio dei giochi.
+Gli anni con il maggior numero di vendite sono infatti: il 2008, il 2009 ed il 2007. La "regione" con il maggior numero di vendite sembra quasi sempre essere il Nord America, seguita dall'Europa e dal Giappone.
+
+## I 5 giochi più venduti al mondo
+
+```{r top5_global_sales, out.height = "100%", out.width = "100%"}
+#maggiori vendite globali
+sales_dataset %>%
+  head(n=5) %>%
+  ggplot(aes(x = Global_Sales,
+             y = reorder(Name, Global_Sales))) +
+  geom_point(color="#E290B3", size=4) + 
+  geom_segment( aes(x=0, xend=Global_Sales, y=reorder(Name, Global_Sales), yend=reorder(Name, Global_Sales)), color='6D1C68') +
+  theme_light() +
+  theme(plot.title = element_text(face = "bold", size=16),
+        axis.text.x = element_text(size=10,vjust=0.5, color="black"),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(size=12, color = "black", face = "bold"),
+        plot.subtitle = element_text(size=14),
+        panel.grid.major.x = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks.x = element_blank()) +
+  labs(x='Vendite (milioni di copie)',y='Giochi', title=NULL)
+```
+
+## I 5 giochi più venduti per "regione"
+
+```{r top5_sales, out.height = "100%", out.width = "100%"}
+#maggiori vendite Europa
+#tabella
+EU_Sorted <- sales_dataset[order(sales_dataset$EU_Sales, decreasing = TRUE),] %>% filter(EU_Sales > 8)
+#grafico
+EU_Graph <- EU_Sorted %>%
+  head(n=5) %>%
+  ggplot(aes(x = EU_Sales,
+             y = reorder(Name, EU_Sales))) +
+  geom_point(color="#E290B3", size=2) + 
+  geom_segment( aes(x=0, xend=EU_Sales, y=reorder(Name, EU_Sales), yend=reorder(Name, EU_Sales)), color='6D1C68') +
+  theme_light() +
+  theme(axis.text.y = element_text(color = "black")) +
+  labs(x=NULL,y=NULL, title=NULL,subtitle='Europa')
+
+
+#maggiori vendite America
+#tabella
+NA_Sorted <- sales_dataset[order(sales_dataset$NA_Sales, decreasing = TRUE),] %>% filter(NA_Sales > 11)
+
+#grafico
+NA_Graph <- NA_Sorted %>%
+  head(n=5) %>%
+  ggplot(aes(x = NA_Sales,
+             y = reorder(Name, NA_Sales))) +
+  geom_point(color="#E290B3", size=2) + 
+  geom_segment( aes(x=0, xend=NA_Sales, y=reorder(Name, NA_Sales), yend=reorder(Name, NA_Sales)), color='6D1C68') +
+  theme_light() +
+  theme(axis.text.y = element_text(color = "black")) +
+  labs(x=NULL,y=NULL, title=NULL,subtitle='Nord America')
+
+
+#maggiori vendite Giappone
+#tabella
+JP_Sorted <- sales_dataset[order(sales_dataset$JP_Sales, decreasing = TRUE),] %>% filter(JP_Sales > 4.3)
+#grafico
+JP_Graph <- JP_Sorted %>%
+  head(n=5) %>%
+  ggplot(aes(x = JP_Sales,
+             y = reorder(Name, JP_Sales))) +
+  geom_point(color="#E290B3", size=2) + 
+  geom_segment( aes(x=0, xend=JP_Sales, y=reorder(Name, JP_Sales), yend=reorder(Name, JP_Sales)), color='6D1C68') +
+  theme_light() +
+  theme(axis.text.y = element_text(color = "black")) +
+  labs(x=NULL,y=NULL, title=NULL,subtitle='Giappone')
+
+
+#maggiori vendite altri paesi
+#tabella
+Other_Sorted <- sales_dataset[order(sales_dataset$Other_Sales, decreasing = TRUE),] %>% filter(Other_Sales > 2.4)
+#grafico
+Other_Graph <- Other_Sorted %>%
+  head(n=5) %>%
+  ggplot(aes(x = Other_Sales,
+             y = reorder(Name, Other_Sales))) +
+  geom_point(color="#E290B3", size=2) + 
+  geom_segment( aes(x=0, xend=Other_Sales, y=reorder(Name, Other_Sales), yend=reorder(Name, Other_Sales)), color='6D1C68') +
+  theme_light() +
+  theme(axis.text.y = element_text(color = "black")) +
+  labs(x=NULL,y=NULL, title=NULL,subtitle='Altri paesi')
+
+figure <- ggarrange(EU_Graph, NA_Graph, JP_Graph, Other_Graph)
+figure
+```
+Possiamo notare come, nei diversi luoghi a cui fanno fondamento i presenti dati, vi è una diversa distribuzione nella quantità di vendita dei diversi giochi.\
+Le "regioni" con maggiore discrepanza dalle altre sembrano essere il Giappone e gli altri paesi non inseriti in sezioni dedicate.
+
+## I 10 editori più attivi
+
+```{r top10_publisher, out.height = "100%", out.width = "100%"}
+publisher <- sales_dataset %>% 
+  filter(Year_of_Release <= 2016) %>%
+  group_by(Publisher) %>% 
+  summarise(Total_Games = n()) %>%
+  arrange(desc(Total_Games)) %>% 
+  head(10)
+ggplot(publisher, aes(x = reorder(Publisher, Total_Games), fill = Publisher, y = Total_Games)) +
+  geom_bar(stat = "identity", fill='#B85597') +
+  labs(y = "Numero di giochi",
+       x = "Editore") +
+  coord_flip() +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size=16),
+        axis.text.x = element_text(size=10,vjust=0.5, color="black"),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(size=12, color = "black", face = "bold"),
+        plot.subtitle = element_text(size=14),
+        legend.position = "none")
+```
+Nel presente grafico si evince quali siano gli editori con il maggior numero di giochi.
+
+## I 10 editori con il maggior numero di vendite
+
+```{r top10_sales_publisher, out.height = "100%", out.width = "100%"}
+top10 <- sales_dataset %>% 
+  group_by(Publisher) %>% 
+  summarise(Sum_Sales = sum(Global_Sales)) %>% 
+  arrange(desc(Sum_Sales)) %>% 
+  top_n(10, Sum_Sales)
+
+ggplot(top10, aes(x = reorder(Publisher, Sum_Sales), fill = Publisher, y = Sum_Sales)) +
+  geom_bar(stat = "identity", fill='#6D1C68') +
+  labs(y = "Numero di giochi",
+       x = "Editore") +
+  coord_flip() +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size=16),
+        axis.text.x = element_text(size=10,vjust=0.5, color="black"),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(size=12, color = "black", face = "bold"),
+        plot.subtitle = element_text(size=14),
+        legend.position = "none")
+```
+Come possiamo notare, i dati delle vendite (per editore) tendono a discostarsi dal numero di giochi rilasciati dallo stesso editore. Ci possono essere svariati motivi che influenzano questo fattore.
+
+## Popolarità dei generi negli anni
+
+```{r year_genre, out.height = "100%", out.width = "100%"}
+sales_dataset %>%
+  filter(Year_of_Release <= 2016) %>%
+  ggplot(aes(x = Year_of_Release, y = Global_Sales, fill = Genre)) +
+  geom_bar(stat = "identity") +
+  labs(title = NULL, x = "Anno", y = "Vendite globali (milioni di copie)", fill = "Legenda:") +
+  scale_x_discrete(breaks = as.character(seq(from = 1980, to = 2016, by = 4))) +
+    theme_classic() +
+  theme(axis.text.x = element_text(vjust=0.5, angle = 45, color = "black", size = 10),
+        axis.text.y = element_text(color = "black"),
+        plot.title = element_text(size=16,face="bold",hjust = 0.5),     
+        text = element_text(size = 12),
+        legend.key.size = unit(0.5, 'cm'),
+      axis.title = element_text(size=12, color = "black", face = "bold")) +
+  scale_fill_brewer(palette = "Set3")
+```
+Nel presente grafico possiamo analizzare la popolarità dei vari generi di gioco e il suo variare negli anni.
+
+## Vendite per genere
+
+```{r genre_sales, out.height = "100%", out.width = "100%"}
+sales_by_genre <- sales_dataset %>% 
+group_by(Genre) %>% 
+summarise(Global_Sales = sum(Global_Sales), NA_Sales = sum(NA_Sales), EU_Sales = sum(EU_Sales), JP_Sales = sum(JP_Sales))
+
+sales_by_genre = melt(sales_by_genre, id.vars = 'Genre')
+colnames(sales_by_genre) = c("Genre", "SalesType", "Sales")
+
+p2 = ggplot(aes(x = Genre, y = Sales, fill = SalesType), data = sales_by_genre) + 
+geom_bar(colour = "black", stat = "identity", position = "dodge") + 
+  theme_classic() +
+theme(axis.text.x = element_text(vjust=0.5, angle = 45, color = "black", size = 10),
+      axis.text.y = element_text(color = "black"),
+      plot.title = element_text(size=16,face="bold",hjust = 0.5),     
+      text = element_text(size = 12),
+      legend.key.size = unit(0.5, 'cm'),
+      axis.title = element_text(size=12, color = "black", face = "bold")) + 
+ggtitle("Vendite per genere") +  
+scale_fill_brewer(palette = "Set3") +
+scale_y_continuous(expand = c(.02, .02)) + 
+labs(x="Genere",y="Vendite", title=NULL,subtitle=NULL,fill = "Legenda:")
+
+
+grid.arrange(p2, ncol = 1)
+```
+Da questo grafico ci è possibile analizzare le vendite per genere e "regione". Con un dato simile siamo in grado di dedurre in quale mercato, futuri giochi, avranno maggiore successo.
+
+## Le 20 piattaforme con più giochi
+
+```{r top20_platform, out.height = "100%", out.width = "100%"}
+platform <- sales_dataset %>% 
+  filter(Year_of_Release <= 2016) %>%
+  group_by(Platform) %>% 
+  summarise(Total_Games = n()) %>%
+  arrange(desc(Total_Games)) %>% 
+  head(20)
+ggplot(platform, aes(x = reorder(Platform, Total_Games), fill = Platform, y = Total_Games)) +
+  geom_bar(stat = "identity", fill='#B85597') +
+  labs(y = "Numero di giochi",
+       x = "Piattaforma") +
+  coord_flip() +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size=16),
+        axis.text.x = element_text(size=10,vjust=0.5, color="black"),
+        axis.text.y = element_text(color = "black", size = 12),
+        axis.title = element_text(size=12, color = "black", face = "bold"),
+        plot.subtitle = element_text(size=14))
+```
+Il presente grafico mette in evidenza come piattaforme più mature, come la PS2, possiedano un "parco" giochi di grandezza maggiore.
+
+## Vendite per piattaforme
+
+```{r platform_sales, out.height = "100%", out.width = "100%"}
+sales_by_platform <- sales_dataset %>% 
+group_by(Platform) %>% 
+summarise(GlobalSales = sum(Global_Sales), NASales = sum(NA_Sales), EUSales = sum(EU_Sales), JPSales = sum(JP_Sales))
+
+sales_by_platform = melt(sales_by_platform, id.vars = 'Platform')
+colnames(sales_by_platform) = c("Platform", "SalesType", "Sales")
+
+p2 = ggplot(aes(x = Platform, y = Sales, fill = SalesType), data = sales_by_platform) + 
+geom_bar(colour = "black", stat = "identity", position = "dodge") + 
+theme_classic() + 
+theme(axis.text.x = element_text(vjust=0.5, angle = 45, color = "black", size = 8),
+      axis.text.y = element_text(color = "black"),
+      plot.title = element_text(size=16,face="bold",hjust = 0.5),     
+      text = element_text(size = 12),
+      legend.key.size = unit(0.5, 'cm'),
+      axis.title = element_text(size=12, color = "black", face = "bold")) + 
+ggtitle("Vendite per piattaforma") +  
+scale_fill_brewer(palette = "Set3") +
+scale_y_continuous(expand = c(.02, .02)) + 
+labs(x="Piattaforma",y="Vendite", title=NULL,subtitle=NULL,fill = "Legenda:")
+grid.arrange(p2, ncol = 1)
+```
+Con questo grafico mettiamo in relazione il numero di vendite dei giochi con la loro piattaforma.
+
+## Classificazione
+
+```{r rating, out.height = "100%", out.width = "100%"}
+rating <- sales_dataset %>% 
+  filter(Year_of_Release <= 2016) %>%
+  filter(Rating != "") %>%
+  group_by(Rating) %>% 
+  summarise(Total_Games = n(), Perc=round(n()/nrow(.)*100,2)) %>%
+  filter(Perc >= 1) %>%
+  arrange(desc(Total_Games))
+
+ggplot(rating, aes(x="", y=Perc, fill=Rating)) +
+  geom_bar(stat="identity", width=1) +
+  geom_label(aes(label = round(Perc)),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE)+
+  coord_polar(theta = "y") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_void()+
+  labs(title = NULL, x = NULL, y = NULL, fill = "Legenda:") 
+```
+
+La classificazione serve ad indentificare a quale pubblico sia destinato ogni singolo gioco (in base ai contenuti presenti in esso).\
+Per riassumere quanto presente nella classificazione:\
+E: per tutte le età\
+E10: per un pubblico di 10+ anni\
+M: per un pubblico di 17+ anni\
+T: per un pubblico di 13+ anni\
+
+# Grazie dell'attenzione!
+![](fine.jpeg)
+
+## Sitografia/bibliografia
+Dataset: <https://www.kaggle.com/datasets/sidtwr/videogames-sales-dataset>\
+Spunti per grafici: <https://r-charts.com/>, <http://www.sthda.com/english/wiki/ggplot2-essentials>, <https://www.kaggle.com/code/mfaaris/15-visualization-and-analysis-with-r>
+Rating: <https://www.esrb.org/ratings-guide/>
